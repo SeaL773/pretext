@@ -1,6 +1,9 @@
 import { prepare, layout, clearCache } from '../src/layout.ts'
 import type { PreparedText } from '../src/layout.ts'
 import { TEXTS } from '../src/test-data.ts'
+import arRisalatAlGhufranPart1 from '../corpora/ar-risalat-al-ghufran-part-1.txt' with { type: 'text' }
+import hiEidgah from '../corpora/hi-eidgah.txt' with { type: 'text' }
+import koUnsuJohEunNal from '../corpora/ko-unsu-joh-eun-nal.txt' with { type: 'text' }
 
 const COUNT = 500
 const FONT_FAMILY = '"Helvetica Neue", Helvetica, Arial, sans-serif'
@@ -16,6 +19,64 @@ const LAYOUT_SAMPLE_REPEATS = 200
 const LAYOUT_SAMPLE_WIDTHS = [200, 250, 300, 350, 400] as const
 const DOM_BATCH_SAMPLE_REPEATS = 1
 const DOM_INTERLEAVED_SAMPLE_REPEATS = 1
+const CORPUS_LAYOUT_SAMPLE_REPEATS = 200
+const CORPUS_WARMUP = 1
+const CORPUS_RUNS = 7
+
+type BenchmarkResult = { label: string, ms: number, desc: string }
+type CorpusBenchmarkResult = {
+  id: string
+  label: string
+  font: string
+  chars: number
+  segments: number
+  width: number
+  lineCount: number
+  prepareMs: number
+  layoutMs: number
+}
+
+type BenchmarkReport = {
+  status: 'ready' | 'error'
+  requestId?: string
+  results?: BenchmarkResult[]
+  corpusResults?: CorpusBenchmarkResult[]
+  message?: string
+}
+
+const params = new URLSearchParams(location.search)
+const reportMode = params.get('report') === '1'
+const requestId = params.get('requestId') ?? undefined
+
+const CORPORA = [
+  {
+    id: 'ko-unsu-joh-eun-nal',
+    label: 'Korean prose',
+    text: koUnsuJohEunNal,
+    font: '18px "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif',
+    lineHeight: 30,
+    width: 300,
+    sampleWidths: [240, 300, 360] as const,
+  },
+  {
+    id: 'hi-eidgah',
+    label: 'Hindi prose',
+    text: hiEidgah,
+    font: '20px "Kohinoor Devanagari", "Noto Serif Devanagari", serif',
+    lineHeight: 32,
+    width: 300,
+    sampleWidths: [240, 300, 360] as const,
+  },
+  {
+    id: 'ar-risalat-al-ghufran-part-1',
+    label: 'Arabic prose',
+    text: arRisalatAlGhufranPart1,
+    font: '20px "Geeza Pro", "Noto Naskh Arabic", "Arial", serif',
+    lineHeight: 34,
+    width: 300,
+    sampleWidths: [240, 300, 360] as const,
+  },
+] as const
 
 // Filter edge cases — not realistic comments
 const commentTexts = TEXTS.filter(t => t.text.trim().length > 1)
@@ -24,22 +85,34 @@ for (let i = 0; i < COUNT; i++) {
   texts.push(commentTexts[i % commentTexts.length]!.text)
 }
 
+declare global {
+  interface Window {
+    __BENCHMARK_READY__?: boolean
+    __BENCHMARK_REPORT__?: BenchmarkReport
+  }
+}
+
 function median(times: number[]): number {
   const sorted = [...times].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
   return sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!
 }
 
-function bench(fn: (repeatIndex: number) => void, sampleRepeats = 1): number {
+function bench(
+  fn: (repeatIndex: number) => void,
+  sampleRepeats = 1,
+  warmup = WARMUP,
+  runs = RUNS,
+): number {
   function runRepeated(): void {
     for (let r = 0; r < sampleRepeats; r++) {
       fn(r)
     }
   }
 
-  for (let i = 0; i < WARMUP; i++) runRepeated()
+  for (let i = 0; i < warmup; i++) runRepeated()
   const times: number[] = []
-  for (let i = 0; i < RUNS; i++) {
+  for (let i = 0; i < runs; i++) {
     const t0 = performance.now()
     runRepeated()
     times.push((performance.now() - t0) / sampleRepeats)
@@ -52,8 +125,73 @@ function nextFrame(): Promise<void> {
   return new Promise(resolve => { requestAnimationFrame(() => { resolve() }) })
 }
 
+function withRequestId<T extends BenchmarkReport>(report: T): BenchmarkReport {
+  return requestId === undefined ? report : { ...report, requestId }
+}
+
+function publishNavigationReport(report: BenchmarkReport): void {
+  if (!reportMode) return
+  const encoded = encodeURIComponent(JSON.stringify(report))
+  history.replaceState(null, '', `${location.pathname}${location.search}#report=${encoded}`)
+}
+
+function setReport(report: BenchmarkReport): void {
+  const reportEl = document.getElementById('benchmark-report')!
+  reportEl.textContent = JSON.stringify(report)
+  reportEl.dataset['ready'] = '1'
+  window.__BENCHMARK_REPORT__ = report
+  window.__BENCHMARK_READY__ = true
+  publishNavigationReport(report)
+}
+
+function buildCorpusBenchmarks(): CorpusBenchmarkResult[] {
+  const corpusResults: CorpusBenchmarkResult[] = []
+  let corpusLayoutSink = 0
+
+  for (const corpus of CORPORA) {
+    const prepareMs = bench(() => {
+      clearCache()
+      prepare(corpus.text, corpus.font)
+    }, 1, CORPUS_WARMUP, CORPUS_RUNS)
+
+    clearCache()
+    const prepared = prepare(corpus.text, corpus.font)
+    const lineCount = layout(prepared, corpus.width, corpus.lineHeight).lineCount
+
+    const layoutMs = bench(repeatIndex => {
+      const width = corpus.sampleWidths[repeatIndex % corpus.sampleWidths.length]!
+      const result = layout(prepared, width, corpus.lineHeight)
+      corpusLayoutSink += result.height + result.lineCount + repeatIndex
+    }, CORPUS_LAYOUT_SAMPLE_REPEATS, CORPUS_WARMUP, CORPUS_RUNS)
+
+    corpusResults.push({
+      id: corpus.id,
+      label: corpus.label,
+      font: corpus.font,
+      chars: corpus.text.length,
+      segments: prepared.widths.length,
+      width: corpus.width,
+      lineCount,
+      prepareMs,
+      layoutMs,
+    })
+  }
+
+  document.body.dataset['corpusLayoutSink'] = String(corpusLayoutSink)
+  return corpusResults
+}
+
 async function run() {
   const root = document.getElementById('root')!
+  const reportEl = document.createElement('pre')
+  reportEl.id = 'benchmark-report'
+  reportEl.hidden = true
+  reportEl.dataset['ready'] = '0'
+  document.body.appendChild(reportEl)
+  window.__BENCHMARK_READY__ = false
+  window.__BENCHMARK_REPORT__ = withRequestId({ status: 'error', message: 'Pending benchmark run' })
+  history.replaceState(null, '', `${location.pathname}${location.search}`)
+
   let topLayoutSink = 0
   let scalingLayoutSink = 0
   let domBatchSink = 0
@@ -85,8 +223,7 @@ async function run() {
     prepared.push(prepare(texts[i]!, FONT))
   }
 
-  type Result = { label: string, ms: number, desc: string }
-  const results: Result[] = []
+  const results: BenchmarkResult[] = []
 
   // --- 1. prepare() ---
   root.innerHTML = '<p>Benchmarking prepare()...</p>'
@@ -146,6 +283,11 @@ async function run() {
   results.push({ label: 'DOM interleaved', ms: tInterleaved, desc: `Single ${WIDTH_BEFORE}→${WIDTH_AFTER}px batch resize: write + read per div` })
 
   document.body.removeChild(container)
+
+  // --- Long-form corpus stress ---
+  root.innerHTML = '<p>Benchmarking long-form corpora...</p>'
+  await nextFrame()
+  const corpusResults = buildCorpusBenchmarks()
 
   // --- Render ---
   // Relative speed only for resize approaches (layout vs DOM). prepare() is
@@ -253,11 +395,39 @@ async function run() {
       ${cjkRows.join('')}
     </table>
   `
+  root.innerHTML += `
+    <h2 style="color:#4fc3f7;font-family:monospace;font-size:16px;margin:24px 0 8px">Long-form corpus stress</h2>
+    <table>
+      <tr><th>Corpus</th><th>Chars</th><th>Segs</th><th>Prepare cold (ms)</th><th>Layout hot (ms)</th><th>Lines @ width</th></tr>
+      ${corpusResults.map(result => `
+        <tr>
+          <td>${result.label}</td>
+          <td>${result.chars.toLocaleString()}</td>
+          <td>${result.segments.toLocaleString()}</td>
+          <td>${result.prepareMs.toFixed(2)}</td>
+          <td>${result.layoutMs < 0.01 ? '<0.01' : result.layoutMs.toFixed(2)}</td>
+          <td>${result.lineCount} @ ${result.width}px</td>
+        </tr>
+      `).join('')}
+    </table>
+    <p class="note">Long-form rows measure one cold prepare of a single full corpus text and one hot layout of that same prepared text. They are intended to catch script-specific prepare regressions that the short shared corpus can hide.</p>
+  `
   root.dataset['topLayoutSink'] = String(topLayoutSink)
   root.dataset['scalingLayoutSink'] = String(scalingLayoutSink)
   root.dataset['domBatchSink'] = String(domBatchSink)
   root.dataset['domInterleavedSink'] = String(domInterleavedSink)
   console.log('benchmark sinks', { topLayoutSink, scalingLayoutSink, domBatchSink, domInterleavedSink })
+
+  setReport(withRequestId({
+    status: 'ready',
+    results,
+    corpusResults,
+  }))
 }
 
-run()
+run().catch(error => {
+  const message = error instanceof Error ? error.message : String(error)
+  const root = document.getElementById('root')!
+  root.innerHTML = `<p>${message}</p>`
+  setReport(withRequestId({ status: 'error', message }))
+})

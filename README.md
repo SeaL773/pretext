@@ -97,6 +97,7 @@ bun test         # lightweight invariants against the shipped implementation
 bun run accuracy-check         # Chrome browser sweep
 bun run accuracy-check:safari  # Safari browser sweep
 bun run accuracy-check:firefox # Firefox browser sweep
+bun run benchmark-check        # Chrome benchmark snapshot (short corpus + long-form corpora)
 ```
 
 Pages:
