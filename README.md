@@ -70,7 +70,7 @@ Tested across 4 fonts (Helvetica Neue, Georgia, Verdana, Courier New) × 8 sizes
 - **CSS config**: targets a common app-text configuration (`white-space: normal`, `word-break: normal`, `overflow-wrap: break-word`, `line-break: auto`). Source newlines are treated as collapsible whitespace, not explicit `<br>`/paragraph breaks. Other configurations (`break-all`, `keep-all`, `strict`, `loose`, `anywhere`) are untested.
 - **`line-height`**: the library does not infer CSS line height. Pass the exact value you render with into `layout()` / `layoutWithLines()`. `line-height: normal` differs across fonts and browsers.
 - **`system-ui` font**: canvas and DOM resolve this CSS keyword to different font variants at certain sizes on macOS. Use a named font (Inter, Helvetica, Arial, etc.) for guaranteed accuracy. See [RESEARCH.md](RESEARCH.md#discovery-system-ui-font-resolution-mismatch).
-- **Server-side**: not zero-config today. The current entry expects browser DOM/canvas APIs; server use would need a canvas-backed path. We still keep a HarfBuzz (WASM) backend around for headless probes and research.
+- **Server-side**: importing the module is now safe in non-DOM runtimes, but actual server-side measurement is still not zero-config. Calling `prepare()` without `OffscreenCanvas` or a DOM canvas path will still need an explicit canvas-backed backend. We keep a HarfBuzz (WASM) backend around for headless probes and research.
 
 ## How it works
 

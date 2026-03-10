@@ -94,7 +94,7 @@ Internal notes for contributors and agents. Use `README.md` as the public source
 - Resize Old Man and the Sea
 - Creative responsive magazine-like layout contouring some shapes
 - Revisit whitespace normalization only for the remaining NBSP / hard-space edge cases, not ordinary collapsible whitespace
-- Make `src/layout.ts` import-safe in non-DOM runtimes and add an explicit server canvas backend path
+- Decide whether to add an explicit server canvas backend path now that `src/layout.ts` imports safely in non-DOM runtimes
 - Decide whether explicit hard line breaks / paragraph-aware layout belong in scope beyond the current `white-space: normal` collapsing model
 - Decide whether automatic hyphenation beyond manual soft-hyphen support is in scope for this repo
 - Decide whether intrinsic sizing / logical width APIs are needed beyond fixed-width height prediction
