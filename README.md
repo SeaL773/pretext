@@ -108,6 +108,7 @@ Pages:
 - `/contour.html` — variable-width contour demo built on `layoutNextLine()`
 - `/editorial.html` — anchored-shape editorial layout demo built from repeated `layoutNextLine()` calls
 - `/chronicle.html` — poster-like editorial spread with procedural contour art and text routed around fixed copy blocks
+- `/blob-lab.html` — grid of seeded polygon blobs that warp as a pure function of viewport size
 - `/sync.html` — three independently wrapped panes that stay anchored to the same text cursor while you scroll any one of them
 - `/accuracy.html` — sweep across fonts, sizes, widths, i18n texts
 - `/benchmark.html` — performance comparison
