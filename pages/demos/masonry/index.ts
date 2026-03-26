@@ -39,20 +39,18 @@ const st: State = {
   })),
 }
 
-// --- dom ---
-const container = document.createElement('div')
-container.style.position = 'relative'
-document.body.appendChild(container)
-
 type DomCache = {
   container: HTMLDivElement // cache lifetime: same as app
   cards: Array<HTMLDivElement | undefined> // cache lifetime: on visibility changes
 }
 
 const domCache: DomCache = {
-  container,
+  container: document.createElement('div'),
   cards: [],
 }
+
+domCache.container.style.position = 'relative'
+document.body.appendChild(domCache.container)
 
 function computeLayout(windowWidth: number): LayoutState {
   let colCount: number
