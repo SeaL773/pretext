@@ -131,9 +131,11 @@ export function normalizeLineStart(
 }
 
 export function countPreparedLines(prepared: PreparedLineBreakData, maxWidth: number): number {
-  if (prepared.simpleLineWalkFastPath) {
-    return countPreparedLinesSimple(prepared, maxWidth)
-  }
+  // Unify with walkPreparedLines to guarantee layout() and layoutWithLines()
+  // always agree on lineCount. The previous dedicated countPreparedLinesSimple
+  // fast path diverged from walkPreparedLinesSimple in the overflow-wrap
+  // grapheme-breaking and canBreakAfter codepaths, causing off-by-one
+  // lineCount mismatches. See #49.
   return walkPreparedLines(prepared, maxWidth)
 }
 
