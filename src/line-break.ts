@@ -343,12 +343,14 @@ function walkPreparedLinesSimple(
       }
 
       if (pendingBreakSegmentIndex >= 0) {
-        const resumeAt = pendingBreakSegmentIndex
+        if (
+          lineEndSegmentIndex > pendingBreakSegmentIndex ||
+          (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
+        ) {
+          emitCurrentLine()
+          continue
+        }
         emitCurrentLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
-        // Resume from the break point, not the current overflow segment.
-        // Segments between the break point and i were appended to lineW but
-        // excluded from the emitted line — they must be re-laid. See #50.
-        i = resumeAt
         continue
       }
 
@@ -629,7 +631,16 @@ export function walkPreparedLines(
         }
 
         if (pendingBreakSegmentIndex >= 0 && pendingBreakFitWidth <= maxWidth + lineFitEpsilon) {
-          emitCurrentLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
+          if (
+            lineEndSegmentIndex > pendingBreakSegmentIndex ||
+            (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
+          ) {
+            emitCurrentLine()
+            continue
+          }
+          const nextSegmentIndex = pendingBreakSegmentIndex
+          emitCurrentLine(nextSegmentIndex, 0, pendingBreakPaintWidth)
+          i = nextSegmentIndex
           continue
         }
 
@@ -895,6 +906,12 @@ export function layoutNextLineRange(
       }
 
       if (pendingBreakSegmentIndex >= 0 && pendingBreakFitWidth <= maxWidth + lineFitEpsilon) {
+        if (
+          lineEndSegmentIndex > pendingBreakSegmentIndex ||
+          (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
+        ) {
+          return finishLine()
+        }
         return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
       }
 
@@ -1042,6 +1059,12 @@ function layoutNextLineRangeSimple(
       }
 
       if (pendingBreakSegmentIndex >= 0) {
+        if (
+          lineEndSegmentIndex > pendingBreakSegmentIndex ||
+          (lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0)
+        ) {
+          return finishLine()
+        }
         return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth)
       }
 
